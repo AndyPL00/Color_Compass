@@ -42,6 +42,10 @@ collection
 2.18
 file:///Users/ionut/.pub-cache/hosted/pub.dev/collection-1.18.0/
 file:///Users/ionut/.pub-cache/hosted/pub.dev/collection-1.18.0/lib/
+color
+2.12
+file:///Users/ionut/.pub-cache/hosted/pub.dev/color-3.0.0/
+file:///Users/ionut/.pub-cache/hosted/pub.dev/color-3.0.0/lib/
 color_converter
 2.12
 file:///Users/ionut/.pub-cache/hosted/pub.dev/color_converter-0.2.1/
@@ -78,6 +82,10 @@ file_selector_windows
 3.2
 file:///Users/ionut/.pub-cache/hosted/pub.dev/file_selector_windows-0.9.3+2/
 file:///Users/ionut/.pub-cache/hosted/pub.dev/file_selector_windows-0.9.3+2/lib/
+flutter_color
+2.12
+file:///Users/ionut/.pub-cache/hosted/pub.dev/flutter_color-2.1.0/
+file:///Users/ionut/.pub-cache/hosted/pub.dev/flutter_color-2.1.0/lib/
 flutter_lints
 3.1
 file:///Users/ionut/.pub-cache/hosted/pub.dev/flutter_lints-4.0.0/
