@@ -32,7 +32,7 @@ class _WardrobeMatchingModeState extends State<WardrobeMatchingMode> {
   }
 
   void _startColorDetection() {
-    _detectionTimer = Timer.periodic(Duration(seconds: 2), (_) {
+    _detectionTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       if (_isActive) {
         _detectDominantColor();
       }
@@ -96,7 +96,7 @@ class _WardrobeMatchingModeState extends State<WardrobeMatchingMode> {
           left: 20,
           right: 20,
           child: Container(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.black54,
               borderRadius: BorderRadius.circular(8),
@@ -105,11 +105,11 @@ class _WardrobeMatchingModeState extends State<WardrobeMatchingMode> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
+                const Text(
                   'Dominant Color:',
                   style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Container(
@@ -121,26 +121,26 @@ class _WardrobeMatchingModeState extends State<WardrobeMatchingMode> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    SizedBox(width: 16),
+                    const SizedBox(width: 16),
                     Text(
                       ColorUtils.getClosestColorName(_dominantColor),
-                      style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                      style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
-                SizedBox(height: 16),
-                Text(
+                const SizedBox(height: 16),
+                const Text(
                   'Matching Suggestions:',
                   style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: _matchingSuggestions.map((colorName) => Chip(
                     label: Text(colorName),
                     backgroundColor: ColorUtils.colorMap[colorName] ?? Colors.grey,
-                    labelStyle: TextStyle(color: Colors.white),
+                    labelStyle: const TextStyle(color: Colors.white),
                   )).toList(),
                 ),
               ],

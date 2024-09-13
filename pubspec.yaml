@@ -19,7 +19,7 @@ dependencies:
   path: ^1.8.3
   image_picker: ^0.8.5+3
   image: ^3.0.1
-  colorconvert: ^1.0.0
+  color_converter: ^0.2.1
 
 dev_dependencies:
   flutter_test:
