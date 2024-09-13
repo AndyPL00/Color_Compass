@@ -1,0 +1,1 @@
+ /Users/ionut/Color_Compass/.dart_tool/flutter_gen/gen_l10n/app_localizations_en.dart /Users/ionut/Color_Compass/.dart_tool/flutter_gen/gen_l10n/app_localizations.dart:  /Users/ionut/Color_Compass/l10n.yaml /Users/ionut/Color_Compass/lib/src/localization/app_en.arb
