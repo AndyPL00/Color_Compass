@@ -49,17 +49,17 @@ class _WardrobeMatchingModeState extends State<WardrobeMatchingMode> {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               ListTile(
-                leading: Icon(Icons.shirt),
+                leading: Icon(Icons.access_alarm),
                 title: Text('Top'),
                 onTap: () => _selectClothingType('Top'),
               ),
               ListTile(
-                leading: Icon(Icons.pants),
+                leading: Icon(Icons.account_balance),
                 title: Text('Pants'),
                 onTap: () => _selectClothingType('Pants'),
               ),
               ListTile(
-                leading: Icon(Icons.shoe),
+                leading: Icon(Icons.account_box),
                 title: Text('Shoes'),
                 onTap: () => _selectClothingType('Shoes'),
               ),
