@@ -42,10 +42,10 @@ class ColorUtils {
     final pixel = image.getPixel(imageX, imageY);
     
     // Extract ARGB values from the integer pixel value
-    final a = (pixel >> 24) & 0xFF;
-    final r = (pixel >> 16) & 0xFF;
-    final g = (pixel >> 8) & 0xFF;
-    final b = pixel & 0xFF;
+   final a = ((pixel & 0xFFFFFFFF) >> 24) & 0xFF;
+    final r = ((pixel & 0xFFFFFFFF) >> 16) & 0xFF;
+    final g = ((pixel & 0xFFFFFFFF) >> 8) & 0xFF;
+    final b = (pixel & 0xFFFFFFFF) & 0xFF;
 
     return Color.fromARGB(a, r, g, b);
   }
