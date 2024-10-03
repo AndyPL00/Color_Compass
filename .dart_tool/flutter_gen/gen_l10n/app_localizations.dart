@@ -96,7 +96,7 @@ abstract class AppLocalizations {
   /// The title of the application
   ///
   /// In en, this message translates to:
-  /// **'sample_flutter_app'**
+  /// **'ColorCompass'**
   String get appTitle;
 }
 

@@ -24,6 +24,7 @@ class _ColorDetectionModeState extends State<ColorDetectionMode> {
   ReceivePort? _receivePort;
   int _frameCount = 0;
   static const int _frameSkip = 2; // Process every 3rd frame
+  bool _isDisposed = false;
 
   final List<String> colors = [
     'Red',
@@ -52,10 +53,19 @@ class _ColorDetectionModeState extends State<ColorDetectionMode> {
 
   @override
   void dispose() {
+    _isDisposed = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isDisposed) {
+        _cleanupResources();
+      }
+    });
+    super.dispose();
+  }
+
+  void _cleanupResources() {
     _stopImageProcessing();
     _stopIsolate();
     _imageNotifier.dispose();
-    super.dispose();
   }
 
   void _startIsolate() async {
@@ -94,49 +104,49 @@ class _ColorDetectionModeState extends State<ColorDetectionMode> {
   }
 
   void _stopImageProcessing() {
-    widget.controller.stopImageStream();
+    if (!_isDisposed && widget.controller.value.isStreamingImages) {
+      widget.controller.stopImageStream().then((_) {
+        print("Image stream stopped successfully");
+      }).catchError((error) {
+        print("Error stopping image stream: $error");
+      });
+    }
   }
 
   void _processImageData(CameraImage image) {
     if (_sendPort != null) {
-      final stopwatch = Stopwatch()..start();
       _sendPort!.send({
         'planes': image.planes.map((plane) => plane.bytes).toList(),
         'targetColor': _targetColor,
         'width': image.width,
         'height': image.height,
-        'format': image.format.group == ImageFormatGroup.yuv420 ? 'yuv420' : 'bgra8888',
-        'sendTime': stopwatch.elapsedMicroseconds,
+        'format': image.format.group == ImageFormatGroup.yuv420
+            ? 'yuv420'
+            : 'bgra8888'
       });
     }
   }
 
- void _handleIsolateMessage(dynamic message) async {
-    if (message is Map<String, dynamic> && message['type'] == 'processedImage') {
-      final stopwatch = Stopwatch()..start();
+  void _handleIsolateMessage(dynamic message) async {
+    if (_isDisposed) return;
+    if (message is Map<String, dynamic> &&
+        message['type'] == 'processedImage') {
       final processedImage = await _convertProcessedDataToImage(message);
-      
-      setState(() {
-        _imageNotifier.value = processedImage;
-      });
-      
-      final totalTime = stopwatch.elapsedMicroseconds + message['processingTime'] as int;
-      final isolateTime = message['processingTime'] as int;
-      final uiConversionTime = stopwatch.elapsedMicroseconds;
-      
-      print('Total processing time: ${totalTime / 1000}ms');
-      print('Isolate processing time: ${isolateTime / 1000}ms');
-      print('UI conversion time: ${uiConversionTime / 1000}ms');
-      print('Image size: ${processedImage?.width}x${processedImage?.height}');
+
+      if (!_isDisposed) {
+        setState(() {
+          _imageNotifier.value = processedImage;
+        });
+      }
     }
   }
 
-Future<ui.Image?> _convertProcessedDataToImage(Map<String, dynamic> processedData) async {
+  Future<ui.Image?> _convertProcessedDataToImage(
+      Map<String, dynamic> processedData) async {
     final width = processedData['width'] as int;
     final height = processedData['height'] as int;
     final data = processedData['data'] as Uint8List;
 
-    final stopwatch = Stopwatch()..start();
     final completer = Completer<ui.Image>();
     ui.decodeImageFromPixels(
       data,
@@ -149,7 +159,6 @@ Future<ui.Image?> _convertProcessedDataToImage(Map<String, dynamic> processedDat
     );
 
     final image = await completer.future;
-    print('Image decoding time: ${stopwatch.elapsedMicroseconds / 1000}ms');
     return image;
   }
 
@@ -163,48 +172,35 @@ Future<ui.Image?> _convertProcessedDataToImage(Map<String, dynamic> processedDat
       if (message is SendPort) {
         mainSendPort = message;
       } else if (message is Map<String, dynamic>) {
-        final stopwatch = Stopwatch()..start();
         final processedData = _processImageIsolate(message);
-        final processingTime = stopwatch.elapsedMicroseconds;
         mainSendPort.send({
           'type': 'processedImage',
-          ...processedData,
-          'processingTime': processingTime,
-          'sendTime': message['sendTime'] as int,
+          ...processedData
         });
       }
     });
   }
 
   static Map<String, dynamic> _processImageIsolate(Map<String, dynamic> args) {
-    final stopwatch = Stopwatch()..start();
-
     final planes = args['planes'] as List<Uint8List>;
     final targetColor = args['targetColor'] as String;
     final width = args['width'] as int;
     final height = args['height'] as int;
     final format = args['format'] as String;
 
-    final scaleFactor = 1;
+    const scaleFactor = 1;
     final scaledWidth = (width * scaleFactor).round();
     final scaledHeight = (height * scaleFactor).round();
 
-    final conversionStopwatch = Stopwatch()..start();
     final Uint8List rgbData = (format == 'yuv420')
-        ? _convertYUV420toRGB(planes[0], planes[1], planes[2], width, height, scaledWidth, scaledHeight)
-        : _convertBGRA8888toRGB(planes[0], width, height, scaledWidth, scaledHeight);
-    final conversionTime = conversionStopwatch.elapsedMicroseconds;
+        ? _convertYUV420toRGB(planes[0], planes[1], planes[2], width, height,
+            scaledWidth, scaledHeight)
+        : _convertBGRA8888toRGB(
+            planes[0], width, height, scaledWidth, scaledHeight);
 
-    final enhancementStopwatch = Stopwatch()..start();
     final targetHSV = _rgbToHSV(_getColorFromName(targetColor));
-    final enhancedImageData = _enhanceImage(rgbData, scaledWidth, scaledHeight, targetHSV);
-    final enhancementTime = enhancementStopwatch.elapsedMicroseconds;
-
-    final totalTime = stopwatch.elapsedMicroseconds;
-
-    print('Isolate - Conversion time: ${conversionTime / 1000}ms');
-    print('Isolate - Enhancement time: ${enhancementTime / 1000}ms');
-    print('Isolate - Total processing time: ${totalTime / 1000}ms');
+    final enhancedImageData =
+        _enhanceImage(rgbData, scaledWidth, scaledHeight, targetHSV);
 
     return {
       'width': scaledWidth,
@@ -385,9 +381,11 @@ Future<ui.Image?> _convertProcessedDataToImage(Map<String, dynamic> processedDat
           child: DropdownButton<String>(
             value: _targetColor,
             onChanged: (newColor) {
-              setState(() {
-                _targetColor = newColor ?? '';
-              });
+              if (!_isDisposed) {
+                setState(() {
+                  _targetColor = newColor ?? '';
+                });
+              }
             },
             items: colors.map((color) {
               return DropdownMenuItem(
@@ -400,9 +398,7 @@ Future<ui.Image?> _convertProcessedDataToImage(Map<String, dynamic> processedDat
         Expanded(
           child: Stack(
             children: [
-              // Camera preview
               CameraPreview(widget.controller),
-              // Processed image overlay
               ValueListenableBuilder<ui.Image?>(
                 valueListenable: _imageNotifier,
                 builder: (context, image, child) {
@@ -430,7 +426,8 @@ class EnhancedColorPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint();
-    final src = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    final src =
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
     final dst = Rect.fromLTWH(0, 0, size.width, size.height);
     canvas.drawImageRect(image, src, dst, paint);
   }

@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "sample_flutter_app" "\0"
+            VALUE "FileDescription", "ColorCompass" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "sample_flutter_app" "\0"
+            VALUE "InternalName", "ColorCompass" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2024 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "sample_flutter_app.exe" "\0"
-            VALUE "ProductName", "sample_flutter_app" "\0"
+            VALUE "OriginalFilename", "ColorCompass.exe" "\0"
+            VALUE "ProductName", "ColorCompass" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

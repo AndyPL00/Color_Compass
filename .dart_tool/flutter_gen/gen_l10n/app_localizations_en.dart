@@ -7,5 +7,5 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'sample_flutter_app';
+  String get appTitle => 'ColorCompass';
 }

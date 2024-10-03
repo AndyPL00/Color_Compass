@@ -1,4 +1,4 @@
-# sample_flutter_app
+# ColorCompass
 
 A new Flutter project.
 
