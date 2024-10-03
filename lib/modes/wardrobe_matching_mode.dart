@@ -1,7 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'dart:async';
-import '../utils/color_utils.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 
 class WardrobeMatchingMode extends StatefulWidget {
   final CameraController controller;
@@ -13,77 +14,92 @@ class WardrobeMatchingMode extends StatefulWidget {
 }
 
 class _WardrobeMatchingModeState extends State<WardrobeMatchingMode> {
-  Color _dominantColor = Colors.transparent;
-  List<String> _matchingSuggestions = [];
-  Timer? _detectionTimer;
-  bool _isActive = true;
+  File? _capturedImage;
+  String? _clothingType;
+  bool _isCapturing = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _startColorDetection();
-  }
+  Future<void> _takePicture() async {
+    if (_isCapturing) return;
 
-  @override
-  void dispose() {
-    _isActive = false;
-    _detectionTimer?.cancel();
-    super.dispose();
-  }
-
-  void _startColorDetection() {
-    _detectionTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (_isActive) {
-        _detectDominantColor();
-      }
+    setState(() {
+      _isCapturing = true;
     });
-  }
 
-  Future<void> _detectDominantColor() async {
-    if (!widget.controller.value.isInitialized) return;
-
-    final image = await widget.controller.takePicture();
-    final bytes = await image.readAsBytes();
-
-    final Color dominantColor = _getDominantColor(bytes);
-    final String colorName = ColorUtils.getClosestColorName(dominantColor);
-
-    if (_isActive) {
+    try {
+      final XFile photo = await widget.controller.takePicture();
       setState(() {
-        _dominantColor = dominantColor;
-        _matchingSuggestions = _getMatchingSuggestions(colorName);
+        _capturedImage = File(photo.path);
+        _isCapturing = false;
+      });
+      _showClothingTypeSelection();
+    } catch (e) {
+      print('Error taking picture: $e');
+      setState(() {
+        _isCapturing = false;
       });
     }
   }
 
-  Color _getDominantColor(List<int> bytes) {
-    Map<Color, int> colorCounts = {};
-    for (int i = 0; i < bytes.length; i += 4) {
-      if (i + 3 < bytes.length) {
-        Color color = Color.fromARGB(255, bytes[i], bytes[i + 1], bytes[i + 2]);
-        colorCounts[color] = (colorCounts[color] ?? 0) + 1;
+  void _showClothingTypeSelection() {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                leading: Icon(Icons.shirt),
+                title: Text('Top'),
+                onTap: () => _selectClothingType('Top'),
+              ),
+              ListTile(
+                leading: Icon(Icons.pants),
+                title: Text('Pants'),
+                onTap: () => _selectClothingType('Pants'),
+              ),
+              ListTile(
+                leading: Icon(Icons.shoe),
+                title: Text('Shoes'),
+                onTap: () => _selectClothingType('Shoes'),
+              ),
+            ],
+          ),
+        );
+      },
+    ).then((_) {
+      if (_clothingType == null) {
+        _resetCapture();
       }
-    }
-    return colorCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
+    });
   }
 
-  List<String> _getMatchingSuggestions(String colorName) {
-    // This is a very basic color matching logic.
-    // In a real app, you'd want to use more sophisticated color theory and fashion rules.
-    switch (colorName.toLowerCase()) {
-      case 'black':
-        return ['White', 'Gray', 'Red'];
-      case 'white':
-        return ['Black', 'Navy', 'Red'];
-      case 'blue':
-        return ['White', 'Gray', 'Khaki'];
-      case 'red':
-        return ['White', 'Black', 'Gray'];
-      case 'green':
-        return ['White', 'Beige', 'Brown'];
-      default:
-        return ['White', 'Black', 'Denim'];
-    }
+  Future<void> _selectClothingType(String type) async {
+    setState(() {
+      _clothingType = type;
+    });
+    Navigator.pop(context);
+    await _saveImage();
+    _resetCapture();
+  }
+
+  Future<void> _saveImage() async {
+    if (_capturedImage == null || _clothingType == null) return;
+
+    final directory = await getApplicationDocumentsDirectory();
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}_$_clothingType.jpg';
+    final savedImage = await _capturedImage!.copy(path.join(directory.path, fileName));
+
+    // Here you would typically save the image path and clothing type to a local database
+    print('Image saved: ${savedImage.path}');
+    print('Clothing type: $_clothingType');
+  }
+
+  void _resetCapture() {
+    setState(() {
+      _capturedImage = null;
+      _clothingType = null;
+    });
   }
 
   @override
@@ -91,57 +107,25 @@ class _WardrobeMatchingModeState extends State<WardrobeMatchingMode> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Positioned(
-          bottom: 150,
-          left: 20,
-          right: 20,
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+        if (_capturedImage != null)
+          Image.file(_capturedImage!, fit: BoxFit.cover),
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 120.0), // Adjusted to account for ModeSelector
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                const Text(
-                  'Dominant Color:',
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: _dominantColor,
-                        border: Border.all(color: Colors.white, width: 2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Text(
-                      ColorUtils.getClosestColorName(_dominantColor),
-                      style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Matching Suggestions:',
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _matchingSuggestions.map((colorName) => Chip(
-                    label: Text(colorName),
-                    backgroundColor: ColorUtils.colorMap[colorName] ?? Colors.grey,
-                    labelStyle: const TextStyle(color: Colors.white),
-                  )).toList(),
+                if (_capturedImage != null)
+                  FloatingActionButton(
+                    onPressed: _resetCapture,
+                    child: Icon(Icons.cancel),
+                    backgroundColor: Colors.red,
+                  ),
+                FloatingActionButton(
+                  onPressed: _capturedImage == null ? _takePicture : null,
+                  child: Icon(Icons.camera),
+                  backgroundColor: _capturedImage == null ? Colors.blue : Colors.grey,
                 ),
               ],
             ),
