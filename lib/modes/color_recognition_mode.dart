@@ -4,9 +4,9 @@ import '../utils/color_utils.dart';
 
 class ColorRecognitionMode extends StatefulWidget {
   final CameraController controller;
-
+  
   const ColorRecognitionMode({Key? key, required this.controller}) : super(key: key);
-
+  
   @override
   _ColorRecognitionModeState createState() => _ColorRecognitionModeState();
 }

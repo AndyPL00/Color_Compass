@@ -9,8 +9,7 @@ import 'package:camera/camera.dart';
 class ColorDetectionMode extends StatefulWidget {
   final CameraController controller;
 
-  const ColorDetectionMode({Key? key, required this.controller})
-      : super(key: key);
+  const ColorDetectionMode({Key? key, required this.controller}) : super(key: key);
 
   @override
   _ColorDetectionModeState createState() => _ColorDetectionModeState();
@@ -23,67 +22,84 @@ class _ColorDetectionModeState extends State<ColorDetectionMode> {
   SendPort? _sendPort;
   ReceivePort? _receivePort;
   int _frameCount = 0;
-  static const int _frameSkip = 2; // Process every 3rd frame
+  static const int _frameSkip = 2;
   bool _isDisposed = false;
+  bool _isProcessing = false;
+  bool _isActive = true;
 
   final List<String> colors = [
-    'Red',
-    'Orange',
-    'Yellow',
-    'Green',
-    'Blue',
-    'Indigo',
-    'Violet',
-    'Gold',
-    'Silver',
-    'Bronze',
-    'Pink',
-    'Purple',
-    'Brown',
-    'Black',
-    'White'
+    'Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Indigo', 'Violet',
+    'Gold', 'Silver', 'Bronze', 'Pink', 'Purple', 'Brown', 'Black', 'White'
   ];
 
   @override
   void initState() {
     super.initState();
-    _startIsolate();
-    _startImageProcessing();
+    _initializeProcessing();
+  }
+
+  @override
+  void didUpdateWidget(ColorDetectionMode oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.controller != oldWidget.controller) {
+      _resetState();
+      _initializeProcessing();
+    }
+  }
+
+  void _resetState() {
+    _isDisposed = false;
+    _isProcessing = false;
+    _isActive = true;
+    _frameCount = 0;
+    _imageNotifier.value = null;
+    _stopIsolate();
+  }
+
+  Future<void> _initializeProcessing() async {
+    if (_isProcessing) return;
+    _isProcessing = true;
+
+    try {
+      await _startIsolate();
+      _attachStreamListener();
+    } catch (e) {
+      print('Error initializing processing: $e');
+    }
+  }
+
+  void _attachStreamListener() {
+    if (!_isDisposed && !widget.controller.value.isStreamingImages) {
+      widget.controller.startImageStream(_processImageData);
+    }
   }
 
   @override
   void dispose() {
     _isDisposed = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_isDisposed) {
-        _cleanupResources();
-      }
-    });
+    _isActive = false;
+    _cleanupResources();
     super.dispose();
   }
 
   void _cleanupResources() {
-    _stopImageProcessing();
     _stopIsolate();
     _imageNotifier.dispose();
   }
 
-  void _startIsolate() async {
+  Future<void> _startIsolate() async {
     final initPort = ReceivePort();
-    _isolate = await Isolate.spawn(_isolateEntry, initPort.sendPort);
-
-    // Wait for the isolate to send its SendPort
-    _sendPort = await initPort.first as SendPort;
-
-    // Close the initialization port
-    initPort.close();
-
-    // Set up the main receive port for ongoing communication
-    _receivePort = ReceivePort();
-    _sendPort!.send(_receivePort!.sendPort);
-
-    // Listen to the main receive port
-    _receivePort!.listen(_handleIsolateMessage);
+    try {
+      _isolate = await Isolate.spawn(_isolateEntry, initPort.sendPort);
+      _sendPort = await initPort.first as SendPort;
+      initPort.close();
+      _receivePort = ReceivePort();
+      _sendPort!.send(_receivePort!.sendPort);
+      _receivePort!.listen(_handleIsolateMessage);
+    } catch (e) {
+      print('Error starting isolate: $e');
+      initPort.close();
+    }
   }
 
   void _stopIsolate() {
@@ -94,55 +110,34 @@ class _ColorDetectionModeState extends State<ColorDetectionMode> {
     _sendPort = null;
   }
 
-  void _startImageProcessing() {
-    widget.controller.startImageStream((image) {
-      _frameCount++;
-      if (_frameCount % _frameSkip == 0) {
-        _processImageData(image);
-      }
-    });
-  }
-
-  void _stopImageProcessing() {
-    if (!_isDisposed && widget.controller.value.isStreamingImages) {
-      widget.controller.stopImageStream().then((_) {
-        print("Image stream stopped successfully");
-      }).catchError((error) {
-        print("Error stopping image stream: $error");
-      });
-    }
-  }
-
   void _processImageData(CameraImage image) {
-    if (_sendPort != null) {
+    if (_isDisposed || !_isProcessing || !_isActive) return;
+
+    _frameCount++;
+    if (_frameCount % _frameSkip == 0 && _sendPort != null) {
       _sendPort!.send({
         'planes': image.planes.map((plane) => plane.bytes).toList(),
         'targetColor': _targetColor,
         'width': image.width,
         'height': image.height,
-        'format': image.format.group == ImageFormatGroup.yuv420
-            ? 'yuv420'
-            : 'bgra8888'
+        'format': image.format.group == ImageFormatGroup.yuv420 ? 'yuv420' : 'bgra8888',
       });
     }
   }
 
-  void _handleIsolateMessage(dynamic message) async {
-    if (_isDisposed) return;
-    if (message is Map<String, dynamic> &&
-        message['type'] == 'processedImage') {
-      final processedImage = await _convertProcessedDataToImage(message);
+void _handleIsolateMessage(dynamic message) {
+    if (_isDisposed || !_isActive) return;
 
-      if (!_isDisposed) {
-        setState(() {
+    if (message is Map<String, dynamic> && message['type'] == 'processedImage') {
+      _convertProcessedDataToImage(message).then((processedImage) {
+        if (!_isDisposed && _isActive) {
           _imageNotifier.value = processedImage;
-        });
-      }
+        }
+      });
     }
   }
 
-  Future<ui.Image?> _convertProcessedDataToImage(
-      Map<String, dynamic> processedData) async {
+  Future<ui.Image?> _convertProcessedDataToImage(Map<String, dynamic> processedData) async {
     final width = processedData['width'] as int;
     final height = processedData['height'] as int;
     final data = processedData['data'] as Uint8List;
@@ -193,14 +188,11 @@ class _ColorDetectionModeState extends State<ColorDetectionMode> {
     final scaledHeight = (height * scaleFactor).round();
 
     final Uint8List rgbData = (format == 'yuv420')
-        ? _convertYUV420toRGB(planes[0], planes[1], planes[2], width, height,
-            scaledWidth, scaledHeight)
-        : _convertBGRA8888toRGB(
-            planes[0], width, height, scaledWidth, scaledHeight);
+        ? _convertYUV420toRGB(planes[0], planes[1], planes[2], width, height, scaledWidth, scaledHeight)
+        : _convertBGRA8888toRGB(planes[0], width, height, scaledWidth, scaledHeight);
 
     final targetHSV = _rgbToHSV(_getColorFromName(targetColor));
-    final enhancedImageData =
-        _enhanceImage(rgbData, scaledWidth, scaledHeight, targetHSV);
+    final enhancedImageData = _enhanceImage(rgbData, scaledWidth, scaledHeight, targetHSV);
 
     return {
       'width': scaledWidth,
@@ -209,14 +201,8 @@ class _ColorDetectionModeState extends State<ColorDetectionMode> {
     };
   }
 
-  static Uint8List _convertYUV420toRGB(
-      Uint8List yPlane,
-      Uint8List uPlane,
-      Uint8List vPlane,
-      int width,
-      int height,
-      int scaledWidth,
-      int scaledHeight) {
+  static Uint8List _convertYUV420toRGB(Uint8List yPlane, Uint8List uPlane, Uint8List vPlane,
+      int width, int height, int scaledWidth, int scaledHeight) {
     final rgbData = Uint8List(scaledWidth * scaledHeight * 4);
     int rgbIndex = 0;
 
@@ -233,9 +219,7 @@ class _ColorDetectionModeState extends State<ColorDetectionMode> {
 
         // Faster YUV to RGB conversion
         int r = (yp + 1.370705 * (vp - 128)).round().clamp(0, 255);
-        int g = (yp - 0.698001 * (vp - 128) - 0.337633 * (up - 128))
-            .round()
-            .clamp(0, 255);
+        int g = (yp - 0.698001 * (vp - 128) - 0.337633 * (up - 128)).round().clamp(0, 255);
         int b = (yp + 1.732446 * (up - 128)).round().clamp(0, 255);
 
         // Reduce color depth to 16-bit (5-6-5)
@@ -279,8 +263,7 @@ class _ColorDetectionModeState extends State<ColorDetectionMode> {
     return rgbData;
   }
 
-  static Uint8List _enhanceImage(
-      Uint8List rgbData, int width, int height, List<double> targetHSV) {
+  static Uint8List _enhanceImage(Uint8List rgbData, int width, int height, List<double> targetHSV) {
     final enhancedData = Uint8List(width * height * 4);
     final targetHue = targetHSV[0];
 
@@ -371,49 +354,64 @@ class _ColorDetectionModeState extends State<ColorDetectionMode> {
     return colorMap[colorName.toLowerCase()] ?? Colors.transparent;
   }
 
-  @override
+ @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          alignment: Alignment.centerLeft,
-          child: DropdownButton<String>(
-            value: _targetColor,
-            onChanged: (newColor) {
-              if (!_isDisposed) {
-                setState(() {
-                  _targetColor = newColor ?? '';
-                });
-              }
+    return GestureDetector(
+      onTapDown: (details) {
+        // You can add tap functionality here if needed
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CameraPreview(widget.controller),
+          ValueListenableBuilder<ui.Image?>(
+            valueListenable: _imageNotifier,
+            builder: (context, image, child) {
+              return image != null && _isActive
+                  ? CustomPaint(
+                      painter: EnhancedColorPainter(image: image),
+                      size: Size.infinite,
+                    )
+                  : Container();
             },
-            items: colors.map((color) {
-              return DropdownMenuItem(
-                value: color,
-                child: Text(color),
-              );
-            }).toList(),
           ),
-        ),
-        Expanded(
-          child: Stack(
-            children: [
-              CameraPreview(widget.controller),
-              ValueListenableBuilder<ui.Image?>(
-                valueListenable: _imageNotifier,
-                builder: (context, image, child) {
-                  return image != null
-                      ? CustomPaint(
-                          painter: EnhancedColorPainter(image: image),
-                          size: Size.infinite,
-                        )
-                      : Container();
-                },
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DropdownButton<String>(
+                      value: _targetColor,
+                      onChanged: (newColor) {
+                        if (!_isDisposed && _isActive) {
+                          setState(() {
+                            _targetColor = newColor ?? '';
+                          });
+                        }
+                      },
+                      items: colors.map((color) {
+                        return DropdownMenuItem(
+                          value: color,
+                          child: Text(color, style: TextStyle(color: Colors.white)),
+                        );
+                      }).toList(),
+                      dropdownColor: Colors.black54,
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -426,8 +424,7 @@ class EnhancedColorPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint();
-    final src =
-        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+    final src = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
     final dst = Rect.fromLTWH(0, 0, size.width, size.height);
     canvas.drawImageRect(image, src, dst, paint);
   }
